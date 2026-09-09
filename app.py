@@ -14,6 +14,188 @@ st.set_page_config(
 )
 
 
+st.markdown(
+    """
+    <style>
+    #MainMenu {
+        visibility: hidden;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    header {
+        background: transparent !important;
+    }
+
+    .stApp {
+        background:
+            radial-gradient(
+                circle at 12% 5%,
+                rgba(0, 229, 255, 0.12),
+                transparent 28%
+            ),
+            radial-gradient(
+                circle at 88% 12%,
+                rgba(147, 51, 234, 0.14),
+                transparent 30%
+            ),
+            linear-gradient(
+                135deg,
+                #040A13 0%,
+                #07111F 50%,
+                #0A1830 100%
+            );
+    }
+
+    .block-container {
+        max-width: 1450px;
+        padding-top: 1.8rem;
+        padding-bottom: 3rem;
+    }
+
+    h1 {
+        color: #EAFBFF !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.7px;
+        text-shadow: 0 0 22px rgba(0, 229, 255, 0.24);
+    }
+
+    h2 {
+        color: #72EEFF !important;
+        font-weight: 750 !important;
+        border-left: 4px solid #00E5FF;
+        padding-left: 12px;
+        margin-top: 2rem !important;
+    }
+
+    h3 {
+        color: #DDF9FF !important;
+        font-weight: 700 !important;
+    }
+
+    div[data-testid="stMetric"] {
+        background:
+            linear-gradient(
+                135deg,
+                rgba(15, 42, 67, 0.92),
+                rgba(7, 23, 40, 0.94)
+            );
+        border: 1px solid rgba(0, 229, 255, 0.25);
+        border-radius: 14px;
+        padding: 15px 16px;
+        box-shadow:
+            0 8px 22px rgba(0, 0, 0, 0.20),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: #A5CBD8 !important;
+        font-size: 0.82rem !important;
+        font-weight: 650 !important;
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #F0FCFF !important;
+        font-size: 1.6rem !important;
+        font-weight: 800 !important;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border: 1px solid rgba(0, 229, 255, 0.18);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.17);
+    }
+
+    div[data-testid="stAlert"] {
+        border-radius: 12px;
+        border: 1px solid rgba(0, 229, 255, 0.24);
+        background-color: rgba(10, 31, 50, 0.76);
+    }
+
+    .stButton > button {
+        min-height: 43px;
+        color: #EFFFFF !important;
+        font-weight: 750;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 229, 255, 0.55);
+        background:
+            linear-gradient(
+                135deg,
+                #0C6A83 0%,
+                #063C59 100%
+            );
+        box-shadow: 0 6px 16px rgba(0, 229, 255, 0.13);
+        transition: all 0.2s ease;
+    }
+
+    .stButton > button:hover {
+        border-color: #7CF5FF;
+        background:
+            linear-gradient(
+                135deg,
+                #1096B1 0%,
+                #075E7B 100%
+            );
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(0, 229, 255, 0.24);
+    }
+
+    div[data-testid="stDownloadButton"] > button {
+        min-height: 42px;
+        color: #F8F2FF !important;
+        font-weight: 700;
+        border-radius: 10px;
+        border: 1px solid rgba(168, 85, 247, 0.62);
+        background:
+            linear-gradient(
+                135deg,
+                #54209D 0%,
+                #2E1065 100%
+            );
+    }
+
+    div[data-testid="stSidebar"] {
+        background:
+            linear-gradient(
+                180deg,
+                #061422 0%,
+                #091D31 100%
+            );
+        border-right: 1px solid rgba(0, 229, 255, 0.18);
+    }
+
+    div[data-testid="stSidebar"] h1 {
+        color: #6DEEFF !important;
+        font-size: 1.5rem !important;
+    }
+
+    div[data-testid="stTabs"] button {
+        color: #ACC9D7;
+        font-weight: 650;
+    }
+
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        color: #71EEFF !important;
+        border-bottom-color: #00E5FF !important;
+    }
+
+    hr {
+        border-color: rgba(0, 229, 255, 0.18);
+    }
+
+    code {
+        color: #83F7FF !important;
+        background-color: rgba(0, 229, 255, 0.09);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 IDENTITIES = [
     "service_alpha",
     "worker_beta",
@@ -222,7 +404,6 @@ def analyze_event(profile, event):
         }
 
     score, reasons = calculate_event_score(profile, event)
-
     profile["recent_scores"].append(score)
     update_evidence(profile, score)
 
@@ -442,14 +623,97 @@ def calculate_metrics(decisions):
 
 
 def render_dashboard():
-    st.title(
-        "🛡️ Adaptive Behavioral Trust "
-        "for Non-Human Identities"
+    st.markdown(
+        """
+        <div style="
+            padding: 28px 30px;
+            margin-bottom: 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(0, 229, 255, 0.34);
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(5, 29, 48, 0.96),
+                    rgba(17, 24, 67, 0.93)
+                );
+            box-shadow:
+                0 14px 34px rgba(0, 0, 0, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        ">
+            <div style="
+                color: #66E8FF;
+                font-size: 0.86rem;
+                font-weight: 800;
+                letter-spacing: 2px;
+                margin-bottom: 8px;
+            ">
+                CYBER SECURITY PS-02 · LIVE TRUST MONITOR
+            </div>
+            <div style="
+                color: #F0FCFF;
+                font-size: 2.2rem;
+                font-weight: 850;
+                line-height: 1.15;
+            ">
+                🛡️ Adaptive Behavioral Trust
+            </div>
+            <div style="
+                color: #A9CBD8;
+                font-size: 1.02rem;
+                margin-top: 8px;
+            ">
+                Continuous monitoring for Non-Human Identities,
+                controlled adaptation, and baseline-poisoning defense.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.caption(
-        "Cyber Security PS-02 | Continuous monitoring, "
-        "controlled adaptation, and baseline protection."
+    st.markdown(
+        """
+        <div style="
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        ">
+            <span style="
+                padding: 7px 12px;
+                border-radius: 999px;
+                background: rgba(0, 229, 255, 0.10);
+                border: 1px solid rgba(0, 229, 255, 0.28);
+                color: #88F4FF;
+                font-size: 0.80rem;
+                font-weight: 700;
+            ">
+                ● STREAM MONITORING ACTIVE
+            </span>
+            <span style="
+                padding: 7px 12px;
+                border-radius: 999px;
+                background: rgba(168, 85, 247, 0.10);
+                border: 1px solid rgba(168, 85, 247, 0.30);
+                color: #D8B4FE;
+                font-size: 0.80rem;
+                font-weight: 700;
+            ">
+                ◈ BASELINE PROTECTION ENABLED
+            </span>
+            <span style="
+                padding: 7px 12px;
+                border-radius: 999px;
+                background: rgba(34, 197, 94, 0.10);
+                border: 1px solid rgba(34, 197, 94, 0.30);
+                color: #86EFAC;
+                font-size: 0.80rem;
+                font-weight: 700;
+            ">
+                ✓ SLOW-BURN DETECTION READY
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.info(
@@ -519,6 +783,7 @@ def render_dashboard():
     m1.metric("Events Processed", metrics["total"])
     m2.metric("Baseline Updates", metrics["updates"])
     m3.metric("Baseline Protected", metrics["protected"])
+
     m4.metric(
         "Avg Decision Latency",
         f"{metrics['latency']} ms",
@@ -528,6 +793,7 @@ def render_dashboard():
 
     m5.metric("Suspicious Events", metrics["suspicious"])
     m6.metric("High-Risk Events", metrics["high_risk"])
+
     m7.metric(
         "Poisoning Attempts Blocked",
         metrics["blocked"],
@@ -764,11 +1030,46 @@ def render_dashboard():
 
 
 def render_explore():
-    st.title("🔎 Explore the Trust Engine")
-
-    st.caption(
-        "Threat model, trust-state logic, controlled adaptation, "
-        "slow-burn defense, and known limitations."
+    st.markdown(
+        """
+        <div style="
+            padding: 22px 26px;
+            margin-bottom: 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(168, 85, 247, 0.35);
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(35, 13, 70, 0.78),
+                    rgba(7, 27, 48, 0.86)
+                );
+        ">
+            <div style="
+                color: #D8B4FE;
+                font-size: 0.82rem;
+                font-weight: 800;
+                letter-spacing: 1.8px;
+            ">
+                SYSTEM DOCUMENTATION · EXPLAINABILITY
+            </div>
+            <div style="
+                color: #F5F3FF;
+                font-size: 2rem;
+                font-weight: 800;
+                margin-top: 6px;
+            ">
+                🔎 Explore the Trust Engine
+            </div>
+            <div style="
+                color: #C7D7E3;
+                margin-top: 7px;
+            ">
+                Threat model, trust-state logic, adaptation policy,
+                slow-burn defense, evaluation, and limitations.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
@@ -951,6 +1252,8 @@ if "page" not in st.session_state:
 with st.sidebar:
     st.title("🛡️ NHI Trust")
 
+    st.caption("Adaptive Behavioral Security Monitor")
+
     st.session_state.page = st.radio(
         "Navigate",
         ["Dashboard", "Explore"],
@@ -959,6 +1262,20 @@ with st.sidebar:
             if st.session_state.page == "Dashboard"
             else 1
         ),
+    )
+
+    st.divider()
+
+    st.markdown(
+        """
+        **PROJECT STATUS**
+
+        🟢 Monitoring engine ready
+
+        🟣 Baseline protection enabled
+
+        🟠 Slow-burn defense enabled
+        """
     )
 
     st.divider()
