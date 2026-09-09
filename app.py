@@ -1,5 +1,5 @@
 import random
-import time 
+import time
 from collections import Counter, deque
 from datetime import datetime
 
@@ -13,29 +13,6 @@ st.set_page_config(
     layout="wide",
 )
 
-st.subheader("Baseline Poisoning Resistance Challenge")
-
-st.info(
-    "The system quarantines unfamiliar low-risk behavior and promotes it "
-    "only after repeated safe observations. Suspicious and high-risk "
-    "behavior is excluded from trusted learning."
-)
-
-challenge_col1, challenge_col2 = st.columns(2)
-
-with challenge_col1:
-    st.write("### Legitimate Drift")
-    st.write(
-        "Repeated low-risk access to a new reporting resource should "
-        "eventually be promoted to the trusted baseline."
-    )
-
-with challenge_col2:
-    st.write("### Poisoning Attempt")
-    st.write(
-        "Gradual suspicious behavior must remain quarantined and must "
-        "not become part of the trusted baseline."
-    )
 
 IDENTITIES = [
     "service_alpha",
@@ -49,11 +26,6 @@ NORMAL_RESOURCES = [
     "orders_db",
     "logs_bucket",
     "metrics_api",
-]
-
-DRIFT_RESOURCES = [
-    "reporting_api",
-    "analytics_db",
 ]
 
 SENSITIVE_RESOURCES = [
@@ -79,43 +51,44 @@ def create_profile():
 
 
 def create_event(identity, scenario):
-    resource = random.choice(NORMAL_RESOURCES)
-    action = random.choice(["READ", "WRITE"])
-    bytes_transferred = random.randint(700, 2800)
-    source_ip = f"10.0.0.{random.randint(2, 20)}"
-    success = True
-
-    if scenario == "DRIFTING":
-        resource = "reporting_api"
-        bytes_transferred = random.randint(1200, 4000)
-
-    elif scenario == "SUSPICIOUS":
-        resource = random.choice(NORMAL_RESOURCES + DRIFT_RESOURCES)
-        action = random.choice(["READ", "WRITE", "EXECUTE"])
-        bytes_transferred = random.randint(4000, 10000)
-        source_ip = f"172.16.10.{random.randint(2, 200)}"
-
-    elif scenario == "HIGH_RISK":
-        resource = random.choice(SENSITIVE_RESOURCES)
-        action = random.choice(["READ", "DELETE", "EXECUTE"])
-        bytes_transferred = random.randint(10000, 50000)
-        source_ip = f"203.0.113.{random.randint(2, 200)}"
-        success = random.choice([True, True, False])
-
-    return {
+    event = {
         "timestamp": datetime.now().strftime("%H:%M:%S"),
         "identity": identity,
-        "resource": resource,
-        "action": action,
-        "bytes_transferred": bytes_transferred,
-        "source_ip": source_ip,
-        "success": success,
-        "scenario": scenario,
+        "resource": random.choice(NORMAL_RESOURCES),
+        "action": random.choice(["READ", "WRITE"]),
+        "bytes_transferred": random.randint(700, 2800),
+        "source_ip": f"10.0.0.{random.randint(2, 20)}",
+        "success": True,
     }
+
+    if scenario == "DRIFTING":
+        event["resource"] = "reporting_api"
+        event["bytes_transferred"] = random.randint(1200, 4000)
+
+    elif scenario == "SUSPICIOUS":
+        event["resource"] = random.choice(
+            NORMAL_RESOURCES + ["analytics_db"]
+        )
+        event["action"] = random.choice(
+            ["READ", "WRITE", "EXECUTE"]
+        )
+        event["bytes_transferred"] = random.randint(4000, 10000)
+        event["source_ip"] = f"172.16.10.{random.randint(2, 200)}"
+
+    elif scenario == "HIGH_RISK":
+        event["resource"] = random.choice(SENSITIVE_RESOURCES)
+        event["action"] = random.choice(
+            ["READ", "DELETE", "EXECUTE"]
+        )
+        event["bytes_transferred"] = random.randint(10000, 50000)
+        event["source_ip"] = f"203.0.113.{random.randint(2, 200)}"
+        event["success"] = random.choice([True, True, False])
+
+    return event
 
 
 def update_baseline(profile, event):
-    previous_total = profile["total_events"]
+    previous_count = profile["total_events"]
 
     profile["total_events"] += 1
     profile["trusted_resources"][event["resource"]] += 1
@@ -123,15 +96,12 @@ def update_baseline(profile, event):
     profile["trusted_ips"][event["source_ip"]] += 1
 
     profile["average_bytes"] = (
-        (profile["average_bytes"] * previous_total)
+        profile["average_bytes"] * previous_count
         + event["bytes_transferred"]
     ) / profile["total_events"]
 
 
 def analyze_event(profile, event):
-    reasons = []
-    score = 0.0
-
     if profile["total_events"] < 5:
         update_baseline(profile, event)
 
@@ -139,31 +109,31 @@ def analyze_event(profile, event):
             "state": "NORMAL",
             "risk_score": 0.0,
             "reasons": [
-                "Warm-up phase: collecting trusted baseline behavior."
+                "Warm-up: collecting trusted baseline behavior."
             ],
             "baseline_updated": True,
         }
 
+    score = 0.0
+    reasons = []
+
     if event["resource"] not in profile["trusted_resources"]:
         score += 0.30
-        reasons.append(f"New resource accessed: {event['resource']}")
+        reasons.append(f"New resource: {event['resource']}")
 
     if event["action"] not in profile["trusted_actions"]:
         score += 0.20
-        reasons.append(f"New action observed: {event['action']}")
+        reasons.append(f"New action: {event['action']}")
 
     if event["source_ip"] not in profile["trusted_ips"]:
         score += 0.20
-        reasons.append(f"New source IP observed: {event['source_ip']}")
+        reasons.append(f"New source IP: {event['source_ip']}")
 
     average_bytes = max(profile["average_bytes"], 1)
 
     if event["bytes_transferred"] > average_bytes * 3:
         score += 0.25
-        reasons.append(
-            f"High data volume: {event['bytes_transferred']} bytes "
-            f"vs normal average {round(average_bytes)} bytes"
-        )
+        reasons.append("Data volume exceeds 3x baseline average.")
 
     if not event["success"]:
         score += 0.15
@@ -172,18 +142,23 @@ def analyze_event(profile, event):
     if event["resource"] in SENSITIVE_RESOURCES:
         score += 0.35
         reasons.append(
-            f"Sensitive resource accessed: {event['resource']}"
+            f"Sensitive resource: {event['resource']}"
         )
 
     score = min(score, 1.0)
 
     profile["recent_scores"].append(score)
+
     recent_average = sum(profile["recent_scores"]) / len(
         profile["recent_scores"]
     )
 
-    if score >= 0.80 or (
-        event["resource"] in SENSITIVE_RESOURCES and score >= 0.50
+    if score >= 0.80:
+        state = "HIGH_RISK"
+
+    elif (
+        event["resource"] in SENSITIVE_RESOURCES
+        and score >= 0.50
     ):
         state = "HIGH_RISK"
 
@@ -202,39 +177,40 @@ def analyze_event(profile, event):
         update_baseline(profile, event)
         baseline_updated = True
         reasons.append(
-            "Behavior matches the trusted baseline. Profile updated."
+            "Matches trusted baseline; profile updated."
         )
 
     elif state == "DRIFTING":
         resource = event["resource"]
-        profile["quarantine"][resource] += 1
-        quarantine_count = profile["quarantine"][resource]
 
-        if quarantine_count >= 3:
+        profile["quarantine"][resource] += 1
+        observed_count = profile["quarantine"][resource]
+
+        if observed_count >= 3:
             update_baseline(profile, event)
             baseline_updated = True
 
             reasons.append(
-                f"Verified legitimate drift: '{resource}' was observed "
-                f"{quarantine_count} times with low risk and has been "
-                "promoted to the trusted baseline."
+                f"Verified legitimate drift: {resource} observed "
+                f"{observed_count} times and promoted to trusted baseline."
             )
+
         else:
             reasons.append(
-                f"New low-risk behavior is quarantined: '{resource}' "
-                f"observed {quarantine_count}/3 times. "
-                "The trusted baseline was not updated."
+                f"Low-risk drift quarantined: {resource} observed "
+                f"{observed_count}/3 times."
             )
 
     else:
         profile["quarantine"][event["resource"]] += 1
+
         reasons.append(
-            "Suspicious or high-risk behavior is excluded from trusted "
-            "learning to prevent baseline poisoning."
+            "Excluded from trusted learning to prevent "
+            "baseline poisoning."
         )
 
     if not reasons:
-        reasons.append("No meaningful deviation was detected.")
+        reasons.append("No meaningful deviation detected.")
 
     return {
         "state": state,
@@ -244,11 +220,12 @@ def analyze_event(profile, event):
     }
 
 
-def initialize_demo():
+def reset_demo():
     st.session_state.profiles = {
         identity: create_profile()
         for identity in IDENTITIES
     }
+
     st.session_state.events = []
     st.session_state.decisions = []
     st.session_state.cycle = 0
@@ -267,21 +244,36 @@ def generate_cycle():
 
     if 6 <= cycle < 12:
         scenarios["worker_beta"] = "DRIFTING"
+
     elif 12 <= cycle < 18:
         scenarios["deploy_gamma"] = "SUSPICIOUS"
+
     elif cycle >= 18:
         scenarios["api_delta"] = "HIGH_RISK"
 
     for identity, scenario in scenarios.items():
         event = create_event(identity, scenario)
         profile = st.session_state.profiles[identity]
+
+        started = time.perf_counter()
+
         decision = analyze_event(profile, event)
 
+        latency_ms = round(
+            (time.perf_counter() - started) * 1000,
+            3,
+        )
+
         profile["state"] = decision["state"]
-        profile["last_reason"] = " | ".join(decision["reasons"])
-        profile["baseline_updated"] = decision["baseline_updated"]
+        profile["last_reason"] = " | ".join(
+            decision["reasons"]
+        )
+        profile["baseline_updated"] = decision[
+            "baseline_updated"
+        ]
 
         st.session_state.events.append(event)
+
         st.session_state.decisions.append(
             {
                 "Time": event["timestamp"],
@@ -293,6 +285,7 @@ def generate_cycle():
                     if decision["baseline_updated"]
                     else "No"
                 ),
+                "Latency (ms)": latency_ms,
                 "Reason": " | ".join(decision["reasons"]),
             }
         )
@@ -302,89 +295,156 @@ def generate_cycle():
 
 
 if "profiles" not in st.session_state:
-    initialize_demo()
+    reset_demo()
 
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = False
 
 
-st.title("🛡️ Adaptive Behavioral Trust for Non-Human Identities")
-st.caption(
-    "Cyber Security PS-02 | Real-time behavior monitoring, "
-    "trust assessment, drift detection, and baseline protection."
-)
-
-button_col, auto_col, reset_col, info_col = st.columns([1, 1, 1, 3])
-
-with button_col:
-    if st.button("Generate One Cycle", use_container_width=True):
-        generate_cycle()
-
-with auto_col:
-    auto_run = st.checkbox(
-        "Auto-run simulation",
-        key="auto_run",
-    )
-
-with reset_col:
-    if st.button("Reset Demo", use_container_width=True):
-        initialize_demo()
-
-with info_col:
-    st.info(
-        f"Simulation cycle: {st.session_state.cycle}. "
-        "Cycles 1–5 establish baseline behavior, cycles 6–11 demonstrate "
-        "drift, cycles 12–17 demonstrate suspicious activity, and cycle 18+ "
-        "demonstrates high-risk behavior."
-    )
-
-st.divider()
-
-state_icons = {
+ICONS = {
     "NORMAL": "🟢",
     "DRIFTING": "🟡",
     "SUSPICIOUS": "🟠",
     "HIGH_RISK": "🔴",
 }
 
-metric_columns = st.columns(4)
 
-for index, state in enumerate(
-    ["NORMAL", "DRIFTING", "SUSPICIOUS", "HIGH_RISK"]
-):
-    count = sum(
-        1
-        for profile in st.session_state.profiles.values()
-        if profile["state"] == state
+st.title("🛡️ Adaptive Behavioral Trust for Non-Human Identities")
+
+st.caption(
+    "Cyber Security PS-02 | Real-time behavior monitoring, "
+    "drift detection, controlled adaptation, and baseline protection."
+)
+
+
+st.subheader("Baseline Poisoning Resistance Challenge")
+
+st.info(
+    "Unknown low-risk behavior is quarantined and promoted only "
+    "after repeated safe observations. Suspicious and high-risk "
+    "behavior is excluded from trusted learning."
+)
+
+challenge_left, challenge_right = st.columns(2)
+
+with challenge_left:
+    st.markdown(
+        "### Legitimate Drift\n"
+        "A new reporting resource is quarantined and promoted "
+        "only after three safe observations."
     )
-    metric_columns[index].metric(
-        f"{state_icons[state]} {state}",
+
+with challenge_right:
+    st.markdown(
+        "### Poisoning Attempt\n"
+        "Suspicious or high-risk activity is quarantined or blocked "
+        "and never becomes trusted baseline behavior."
+    )
+
+
+st.divider()
+
+
+control1, control2, control3, control4 = st.columns([1, 1, 1, 3])
+
+with control1:
+    if st.button("Generate One Cycle", use_container_width=True):
+        generate_cycle()
+
+with control2:
+    st.checkbox("Auto-run simulation", key="auto_run")
+
+with control3:
+    if st.button("Reset Demo", use_container_width=True):
+        reset_demo()
+
+with control4:
+    st.info(
+        f"Simulation cycle: {st.session_state.cycle}. "
+        "Cycles 1-5: baseline; cycles 6-11: drift; "
+        "cycles 12-17: suspicious; cycle 18+: high risk."
+    )
+
+
+state_columns = st.columns(4)
+
+for column, state in zip(state_columns, ICONS):
+    count = sum(
+        profile["state"] == state
+        for profile in st.session_state.profiles.values()
+    )
+
+    column.metric(
+        f"{ICONS[state]} {state}",
         count,
     )
+
+
+st.subheader("Live Evaluation Metrics")
+
+decisions = st.session_state.decisions
+total_events = len(decisions)
+
+baseline_updates = sum(
+    item["Baseline Updated"] == "Yes"
+    for item in decisions
+)
+
+if total_events:
+    average_latency = round(
+        sum(
+            item["Latency (ms)"]
+            for item in decisions
+        ) / total_events,
+        3,
+    )
+else:
+    average_latency = 0.0
+
+metric1, metric2, metric3, metric4 = st.columns(4)
+
+metric1.metric("Events Processed", total_events)
+metric2.metric("Baseline Updates", baseline_updates)
+metric3.metric(
+    "Baseline Protected",
+    total_events - baseline_updates,
+)
+metric4.metric(
+    "Avg Decision Latency",
+    f"{average_latency} ms",
+)
+
 
 st.subheader("Identity Trust Overview")
 
 overview = []
 
 for identity, profile in st.session_state.profiles.items():
-    recent_risk = 0.0
-
     if profile["recent_scores"]:
         recent_risk = round(
             sum(profile["recent_scores"])
             / len(profile["recent_scores"]),
             2,
         )
+    else:
+        recent_risk = 0.0
 
     overview.append(
         {
             "Identity": identity,
-            "State": f"{state_icons[profile['state']]} {profile['state']}",
+            "State": (
+                f"{ICONS[profile['state']]} "
+                f"{profile['state']}"
+            ),
             "Recent Risk": recent_risk,
             "Trusted Events": profile["total_events"],
-            "Quarantined Resources": len(profile["quarantine"]),
+            "Quarantined Resources": len(
+                profile["quarantine"]
+            ),
             "Baseline Updated": (
-                "Yes" if profile["baseline_updated"] else "No"
+                "Yes"
+                if profile["baseline_updated"]
+                else "No"
             ),
         }
     )
@@ -395,61 +455,76 @@ st.dataframe(
     hide_index=True,
 )
 
+
 st.subheader("Latest Decisions")
 
-if st.session_state.decisions:
+if decisions:
     st.dataframe(
-        pd.DataFrame(st.session_state.decisions[::-1]),
+        pd.DataFrame(decisions[::-1]),
         use_container_width=True,
         hide_index=True,
     )
 else:
     st.warning(
-        "No events available. Click Generate Activity Cycle to begin."
+        "No events available. Click Generate One Cycle to begin."
     )
+
 
 st.subheader("Identity Explanation")
 
-selected_identity = st.selectbox("Select an identity", IDENTITIES)
-selected_profile = st.session_state.profiles[selected_identity]
+selected_identity = st.selectbox(
+    "Select an identity",
+    IDENTITIES,
+)
 
-st.write(f"### {state_icons[selected_profile['state']]} {selected_identity}")
-st.write(f"**Current state:** {selected_profile['state']}")
+profile = st.session_state.profiles[selected_identity]
+
+st.markdown(
+    f"### {ICONS[profile['state']]} {selected_identity}"
+)
+
+st.write(f"**Current state:** {profile['state']}")
 st.write(
-    f"**Trusted baseline events:** {selected_profile['total_events']}"
+    f"**Trusted baseline events:** {profile['total_events']}"
 )
 st.write(
     "**Trusted average data volume:** "
-    f"{round(selected_profile['average_bytes'], 2)} bytes"
+    f"{round(profile['average_bytes'], 2)} bytes"
 )
-st.write(f"**Latest explanation:** {selected_profile['last_reason']}")
+st.write(
+    f"**Latest explanation:** {profile['last_reason']}"
+)
 
-if selected_profile["baseline_updated"]:
+if profile["baseline_updated"]:
     st.success(
-        "Baseline decision: trusted behavior was allowed to update "
-        "the identity profile."
+        "Baseline decision: trusted behavior updated the "
+        "identity profile."
     )
 else:
     st.warning(
         "Baseline decision: behavior was quarantined or excluded; "
-        "trusted baseline was protected."
+        "baseline protected."
     )
-    
-trusted_col, quarantine_col = st.columns(2)
 
-with trusted_col:
+
+trusted_column, quarantined_column = st.columns(2)
+
+with trusted_column:
     st.write("#### Trusted Resources")
-    if selected_profile["trusted_resources"]:
-        st.json(dict(selected_profile["trusted_resources"]))
-    else:
-        st.write("No trusted resources collected yet.")
 
-with quarantine_col:
+    if profile["trusted_resources"]:
+        st.json(dict(profile["trusted_resources"]))
+    else:
+        st.write("No trusted resources yet.")
+
+with quarantined_column:
     st.write("#### Quarantined Resources")
-    if selected_profile["quarantine"]:
-        st.json(dict(selected_profile["quarantine"]))
+
+    if profile["quarantine"]:
+        st.json(dict(profile["quarantine"]))
     else:
         st.write("No quarantined resources.")
+
 
 st.subheader("Recent Event Stream")
 
@@ -460,8 +535,8 @@ if st.session_state.events:
         hide_index=True,
     )
 
-if auto_run:
-    generate_cycle()
-    time.sleep(1)
-    st.rerun()
 
+if st.session_state.auto_run:
+    time.sleep(1)
+    generate_cycle()
+    st.rerun()
