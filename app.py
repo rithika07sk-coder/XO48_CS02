@@ -13,6 +13,30 @@ st.set_page_config(
     layout="wide",
 )
 
+st.subheader("Baseline Poisoning Resistance Challenge")
+
+st.info(
+    "The system quarantines unfamiliar low-risk behavior and promotes it "
+    "only after repeated safe observations. Suspicious and high-risk "
+    "behavior is excluded from trusted learning."
+)
+
+challenge_col1, challenge_col2 = st.columns(2)
+
+with challenge_col1:
+    st.write("### Legitimate Drift")
+    st.write(
+        "Repeated low-risk access to a new reporting resource should "
+        "eventually be promoted to the trusted baseline."
+    )
+
+with challenge_col2:
+    st.write("### Poisoning Attempt")
+    st.write(
+        "Gradual suspicious behavior must remain quarantined and must "
+        "not become part of the trusted baseline."
+    )
+
 IDENTITIES = [
     "service_alpha",
     "worker_beta",
@@ -62,7 +86,7 @@ def create_event(identity, scenario):
     success = True
 
     if scenario == "DRIFTING":
-        resource = random.choice(DRIFT_RESOURCES)
+        resource = "reporting_api"
         bytes_transferred = random.randint(1200, 4000)
 
     elif scenario == "SUSPICIOUS":
@@ -177,12 +201,13 @@ def analyze_event(profile, event):
     if state == "NORMAL":
         update_baseline(profile, event)
         baseline_updated = True
-        reasons.append("Matches the trusted baseline. Profile updated.")
+        reasons.append(
+            "Behavior matches the trusted baseline. Profile updated."
+        )
 
     elif state == "DRIFTING":
         resource = event["resource"]
         profile["quarantine"][resource] += 1
-
         quarantine_count = profile["quarantine"][resource]
 
         if quarantine_count >= 3:
@@ -190,23 +215,22 @@ def analyze_event(profile, event):
             baseline_updated = True
 
             reasons.append(
-                f"New resource '{resource}' was observed "
-                f"{quarantine_count} times with low risk. "
-                "It is now verified as legitimate drift and added "
-                "to the trusted baseline."
+                f"Verified legitimate drift: '{resource}' was observed "
+                f"{quarantine_count} times with low risk and has been "
+                "promoted to the trusted baseline."
             )
         else:
             reasons.append(
-                f"New low-risk behavior is quarantined "
-                f"({quarantine_count}/3 observations). "
-                "It will not update the trusted baseline yet."
+                f"New low-risk behavior is quarantined: '{resource}' "
+                f"observed {quarantine_count}/3 times. "
+                "The trusted baseline was not updated."
             )
 
     else:
         profile["quarantine"][event["resource"]] += 1
         reasons.append(
-            "Suspicious or high-risk behavior was excluded from "
-            "the trusted baseline to prevent baseline poisoning."
+            "Suspicious or high-risk behavior is excluded from trusted "
+            "learning to prevent baseline poisoning."
         )
 
     if not reasons:
@@ -400,6 +424,17 @@ st.write(
 )
 st.write(f"**Latest explanation:** {selected_profile['last_reason']}")
 
+if selected_profile["baseline_updated"]:
+    st.success(
+        "Baseline decision: trusted behavior was allowed to update "
+        "the identity profile."
+    )
+else:
+    st.warning(
+        "Baseline decision: behavior was quarantined or excluded; "
+        "trusted baseline was protected."
+    )
+    
 trusted_col, quarantine_col = st.columns(2)
 
 with trusted_col:
