@@ -2,327 +2,342 @@
 
 ## Cyber Security PS-02 | XO CODE 2026
 
-A real-time behavioral trust-monitoring prototype for **Non-Human Identities (NHIs)** such as service accounts, API credentials, automation accounts, deployment bots, workload identities, and application identities.
+A real-time Streamlit dashboard that monitors simulated
+Non-Human Identities (NHIs), learns separate behavioral baselines,
+detects behavioral deviation, supports controlled adaptation, and
+prevents suspicious behavior from contaminating trusted profiles.
 
-The system continuously monitors identity activity, learns a separate behavioral baseline for every identity, detects meaningful deviations, prevents suspicious behavior from contaminating the trusted baseline, and assigns one of four operational trust states:
-
-- `NORMAL`
-- `DRIFTING`
-- `SUSPICIOUS`
-- `HIGH_RISK`
+The project demonstrates safe monitoring of synthetic service accounts,
+workload identities, deployment identities, and API identities. It uses
+no real credentials, production systems, customer data, or external
+security infrastructure.
 
 ---
 
-## Problem Statement
+## Problem Addressed
 
-Modern systems depend heavily on non-human identities to access databases, APIs, cloud storage, repositories, deployment systems, and internal services.
+Modern software systems depend on Non-Human Identities such as service
+accounts, automation accounts, API credentials, deployment bots, and
+workload identities. These identities access databases, APIs, storage,
+deployment systems, and internal services without direct human action.
 
-A compromised service account can use valid credentials and gradually modify its behavior. For example, an attacker may first access one new resource, then slowly increase access frequency, introduce new actions, access sensitive resources, or transfer abnormal amounts of data. If a security system blindly learns every new event as normal, the attacker's behavior can poison the baseline.
+A compromised NHI may still use valid credentials. Instead of launching
+an obvious attack immediately, it may introduce small deviations over
+time: a new IP address, slightly higher data transfer, new resources, or
+unfamiliar actions. If every new event is blindly learned as normal, the
+trusted baseline can be poisoned.
 
-This project addresses that challenge through an adaptive behavioral trust model that:
+This project provides an adaptive trust layer that distinguishes:
 
-1. Learns normal behavior separately for each identity.
-2. Detects new resources, actions, IP addresses, failures, and data-transfer deviations.
-3. Differentiates low-risk operational drift from suspicious activity.
-4. Quarantines uncertain behavior before allowing it to influence the baseline.
-5. Prevents suspicious and high-risk events from becoming trusted behavior.
-6. Provides a human-readable explanation for every decision.
+- Normal known behavior.
+- Legitimate low-risk behavioral drift.
+- Suspicious multi-signal behavior.
+- Severe or persistent high-risk compromise behavior.
 
 ---
 
 ## Objectives
 
-- Build a continuously running activity-monitoring system.
-- Maintain independent profiles for multiple NHIs.
-- Analyze behavioral context rather than a single event field.
-- Detect sudden suspicious actions and gradual behavioral changes.
-- Support controlled baseline adaptation.
-- Resist baseline poisoning attempts.
-- Generate explanations for risk decisions.
-- Demonstrate the four required trust states in a safe simulated environment.
+- Continuously process simulated NHI activity as a live event stream.
+- Maintain a separate behavioral profile for every identity.
+- Use resource, action, IP, data volume, success status, and sensitive
+  resource access as behavioral signals.
+- Support `NORMAL`, `DRIFTING`, `SUSPICIOUS`, and `HIGH_RISK` states.
+- Allow repeated, verified low-risk drift to influence the baseline.
+- Prevent suspicious and high-risk observations from influencing trust.
+- Detect slow-burn compromise attempts through cumulative evidence.
+- Provide human-readable explanations for decisions.
+- Measure decision latency and display live evaluation metrics.
 
 ---
 
-## Trust States
+## Implemented Features
 
-| State | Meaning | Example |
-|---|---|---|
-| `NORMAL` | Behavior matches the identity's trusted baseline | A service account accesses its regular database with normal data volume |
-| `DRIFTING` | New but currently low-risk behavior that needs observation | A service account starts using a newly deployed reporting API |
-| `SUSPICIOUS` | Repeated or significant abnormal behavior | An identity uses an unfamiliar IP and abnormal action pattern |
-| `HIGH_RISK` | Severe anomaly or access to a sensitive resource | An identity accesses a secrets vault with high data transfer |
-
----
-
-## Key Features
-
-- **Real-time activity stream** generated continuously for multiple identities.
-- **Per-identity behavioral profiles** rather than one global baseline.
-- **Warm-up learning phase** to establish initial trusted normal behavior.
-- **Resource novelty detection** for newly accessed databases, APIs, buckets, and systems.
-- **Action novelty detection** for unfamiliar actions such as `EXECUTE` or `DELETE`.
-- **Source IP novelty detection** for access from unfamiliar network locations.
-- **Data-volume anomaly detection** based on each identity's historical average.
-- **Failed-action detection** for potentially abnormal access attempts.
-- **Sensitive-resource detection** for high-impact systems such as secrets storage and admin consoles.
-- **Quarantine-based adaptation** for unfamiliar but low-risk behavior.
-- **Baseline protection** that prevents suspicious or high-risk behavior from changing the trusted profile.
-- **Human-readable explanations** for every trust decision.
+| Feature | Implementation |
+|---|---|
+| Live event monitoring | Generate one simulation cycle or enable auto-run |
+| Multiple NHIs | Four independently profiled synthetic identities |
+| Warm-up baseline | First five events per identity establish trusted behavior |
+| Per-identity baseline | Resources, actions, IPs, and average data volume |
+| Risk scoring | Adds weighted deviation signals and caps score at `1.0` |
+| Trust states | `NORMAL`, `DRIFTING`, `SUSPICIOUS`, `HIGH_RISK` |
+| Controlled adaptation | Repeated low-risk drift can be promoted after verification |
+| Baseline protection | Suspicious and high-risk observations are excluded |
+| Slow-burn detection | Persistent mild deviations accumulate identity evidence |
+| Evidence decay | Normal behavior gradually reduces accumulated evidence |
+| Explainability | Every decision includes risk and adaptation reasons |
+| Dashboard metrics | Events, baseline updates, protected events, latency, alerts |
+| Charts | Per-cycle risk score and cumulative evidence trends |
+| Export | CSV downloads for decisions and event logs |
+| Explore page | Threat model, states, adaptation, metrics, and limitations |
 
 ---
 
-## System Architecture
-
-```text
-┌─────────────────────────────┐
-│ Synthetic Activity Generator │
-│  - Service accounts          │
-│  - API identities            │
-│  - Deployment identities     │
-└──────────────┬──────────────┘
-               │ Real-time events
-               ▼
-┌─────────────────────────────┐
-│ Event Data Model             │
-│  - Identity                  │
-│  - Resource                  │
-│  - Action                    │
-│  - IP address                │
-│  - Data volume               │
-│  - Success / failure         │
-└──────────────┬──────────────┘
-               ▼
-┌─────────────────────────────┐
-│ Profile Manager              │
-│  - Separate profile per NHI  │
-│  - Trusted baseline          │
-│  - Quarantine profile        │
-└──────────────┬──────────────┘
-               ▼
-┌─────────────────────────────┐
-│ Behavioral Risk Engine       │
-│  - Anomaly scoring           │
-│  - Cumulative risk           │
-│  - State classification      │
-│  - Explanation generation    │
-└──────────────┬──────────────┘
-               ▼
-┌─────────────────────────────┐
-│ Decision Output              │
-│ NORMAL / DRIFTING /          │
-│ SUSPICIOUS / HIGH_RISK       │
-└─────────────────────────────┘
-```
-
----
-
-## Project Structure
+## Actual Project Structure
 
 ```text
 cyber_ps02_adaptive_trust/
-│
-├── src/
-│   ├── __init__.py
-│   ├── models.py
-│   ├── activity_generator.py
-│   ├── identity_profile.py
-│   └── risk_engine.py
-│
-├── tests/
-│   ├── __init__.py
-│   ├── test_profile.py
-│   └── test_risk_engine.py
-│
-├── data/
-├── requirements.txt
+├── .gitignore
+├── app.py
 ├── README.md
-└── .gitignore
+└── requirements.txt
+```
+
+The complete prototype is implemented in `app.py`.
+
+---
+
+## Architecture
+
+```text
+Synthetic NHI Event Stream
+          |
+          v
+Per-Identity Behavioral Profile
+Resources | Actions | IPs | Average Data Volume
+          |
+          v
+Per-Event Risk Scoring
+New Resource | New Action | New IP | High Volume
+Failure | Sensitive Resource
+          |
+          v
+Cumulative Evidence Store
+Per-identity evidence accumulation and normal-event decay
+          |
+          v
+Trust-State Decision
+NORMAL | DRIFTING | SUSPICIOUS | HIGH_RISK
+          |
+          v
+Controlled Baseline Adaptation
+Promote verified safe drift / block suspicious behavior
+          |
+          v
+Streamlit Dashboard
+Metrics | Charts | Explanations | CSV Event and Decision Logs
 ```
 
 ---
 
-## Event Format
+## Technology Stack
 
-The activity generator produces events in the following format:
+| Technology | Purpose |
+|---|---|
+| Python | Core application and behavioral trust logic |
+| Streamlit | Live interactive dashboard |
+| Pandas | Tables, CSV export, trend-chart data preparation |
+| `Counter` and `deque` | Profile frequency tracking and recent score history |
+| Git and GitHub | Version control and project collaboration |
 
-```json
-{
-  "identity": "service_alpha",
-  "timestamp": "2026-09-09T11:35:20",
-  "resource": "orders_db",
-  "action": "READ",
-  "bytes_transferred": 1400,
-  "source_ip": "10.0.0.8",
-  "success": true,
-  "simulated_state": "NORMAL"
-}
-```
+---
 
-### Event Fields
+## Monitored Event Fields
+
+Every simulated event includes the following fields:
 
 | Field | Description |
 |---|---|
-| `identity` | Name of the non-human identity performing the action |
-| `timestamp` | Time at which the activity occurred |
-| `resource` | Database, API, storage bucket, or system being accessed |
-| `action` | Operation performed, such as `READ`, `WRITE`, `DELETE`, or `EXECUTE` |
-| `bytes_transferred` | Amount of data involved in the activity |
-| `source_ip` | Source IP address associated with the event |
-| `success` | Whether the requested operation succeeded |
-| `simulated_state` | Scenario label used only for safe demonstration testing |
+| `timestamp` | Time at which the event is generated |
+| `identity` | Synthetic NHI performing the operation |
+| `resource` | Resource accessed by the identity |
+| `action` | `READ`, `WRITE`, `EXECUTE`, or `DELETE` |
+| `bytes_transferred` | Simulated amount of transferred data |
+| `source_ip` | Source IP address for the activity |
+| `success` | Whether the simulated operation succeeds |
+| `scenario` | Demonstration scenario label |
+
+Example:
+
+```json
+{
+  "timestamp": "20:15:42",
+  "identity": "service_alpha",
+  "resource": "orders_db",
+  "action": "READ",
+  "bytes_transferred": 1450,
+  "source_ip": "10.0.0.8",
+  "success": true,
+  "scenario": "NORMAL"
+}
+```
 
 ---
 
-## Behavioral Risk Factors
+## Risk-Scoring Signals
 
-The risk engine evaluates each event using the following signals:
+The system evaluates each event against the selected identity's trusted
+baseline.
 
-| Risk Signal | Description | Example |
+| Signal | Weight | Reason |
+|---|---:|---|
+| Previously unseen resource | 0.30 | May represent a new service dependency or unauthorized access |
+| Previously unseen action | 0.20 | Detects unusual operation types |
+| Previously unseen source IP | 0.20 | Detects new network origin |
+| Data transfer above 3× baseline | 0.25 | Detects unusually large transfers |
+| Failed operation | 0.15 | Detects abnormal access behavior |
+| Sensitive resource access | 0.35 | Detects high-impact resource interaction |
+
+The per-event score is capped at `1.0`.
+
+---
+
+## Trust-State Logic
+
+| State | Trigger | Baseline Decision |
 |---|---|---|
-| New resource | Identity accesses a resource not in its trusted profile | First access to `reporting_api` |
-| New action | Identity performs an unfamiliar action | `EXECUTE` appears for a read-only service |
-| New IP address | Access comes from a previously unseen source IP | Access moves from internal IP to external IP |
-| High data transfer | Transfer volume is much larger than normal | 20,000 bytes compared to a 1,500-byte baseline |
-| Failed operation | Operation fails unexpectedly | Multiple unsuccessful access attempts |
-| Sensitive resource | Identity accesses a high-impact system | `secrets_vault`, `admin_console`, or `production_backup` |
-| Cumulative behavior | Multiple moderate anomalies occur close together | Repeated new resources and unusual activity patterns |
+| `NORMAL` | No meaningful deviation evidence | Update trusted profile |
+| `DRIFTING` | Low-risk per-event deviation or early cumulative evidence | Quarantine and observe |
+| `SUSPICIOUS` | Multi-signal event or cumulative evidence ≥ `1.20` | Exclude from learning |
+| `HIGH_RISK` | Severe event, sensitive-resource risk, or cumulative evidence ≥ `2.60` | Exclude from learning |
+
+The system also records state changes for each identity.
 
 ---
 
-## Risk Scoring Method
+## Baseline Protection
 
-The system calculates a risk score from `0.0` to `1.0`.
+### Normal behavior
 
-```text
-Risk Score =
-    New Resource Score
-  + New Action Score
-  + New Source IP Score
-  + High Data Transfer Score
-  + Failed Operation Score
-  + Sensitive Resource Score
-```
-
-Current prototype weights:
-
-| Condition | Score Added |
-|---|---:|
-| New resource | 0.30 |
-| New action | 0.20 |
-| New source IP | 0.20 |
-| Data transfer more than 3× normal average | 0.25 |
-| Failed action | 0.15 |
-| Sensitive resource access | 0.35 |
-
-The final score is capped at `1.0`.
-
----
-
-## State Classification Logic
-
-```text
-Risk score < 0.25
-    → NORMAL
-
-0.25 ≤ Risk score < 0.55
-    → DRIFTING
-
-0.55 ≤ Risk score < 0.80
-    → SUSPICIOUS
-
-Risk score ≥ 0.80
-    → HIGH_RISK
-```
-
-The system also considers the recent average risk score for an identity. This helps identify cumulative suspicious activity instead of treating every action as fully independent.
-
----
-
-## Controlled Baseline Adaptation
-
-A critical requirement of this project is preventing baseline poisoning.
-
-### Trusted baseline update
-
-Events classified as `NORMAL` are added to the identity's trusted baseline.
+Normal observations update the identity's trusted resources, actions, IP
+history, and average data volume.
 
 ```text
 NORMAL event
-      ↓
-Trusted behavior profile updated
+      |
+      v
+Trusted behavioral baseline updated
 ```
 
-### Quarantine process
+### Legitimate drift
 
-Events classified as `DRIFTING` are not immediately trusted.
+A low-risk new behavior is not trusted immediately. It is quarantined
+until it has appeared safely at least three times.
 
 ```text
 New low-risk behavior
-      ↓
-Quarantine profile
-      ↓
-Repeated observation required
-      ↓
-Possible future trusted baseline update
+      |
+      v
+Quarantine counter increases
+      |
+      v
+Three safe observations
+      |
+      v
+Eligible for trusted baseline promotion
 ```
 
-### Suspicious and high-risk behavior
+### Suspicious or high-risk behavior
 
-Events classified as `SUSPICIOUS` or `HIGH_RISK` are excluded from trusted learning.
+Suspicious and high-risk activity is never included in the trusted
+baseline.
 
 ```text
-Suspicious or high-risk event
-      ↓
-Risk alert generated
-      ↓
-Event remains outside trusted baseline
-      ↓
-Baseline poisoning is prevented
+SUSPICIOUS or HIGH_RISK event
+      |
+      v
+Record explanation and quarantine observation
+      |
+      v
+Exclude from trusted learning
+      |
+      v
+Prevent baseline poisoning
 ```
+
+---
+
+## Surprise Challenge 1
+
+### Baseline Poisoning Resistance
+
+The system prevents unknown activity from becoming trusted immediately.
+
+- `worker_beta` starts accessing `reporting_api`.
+- The new resource initially becomes `DRIFTING`.
+- It is placed in quarantine rather than being immediately trusted.
+- After three low-risk observations, it can be promoted.
+- Suspicious and high-risk behavior remains excluded from the baseline.
+
+This demonstrates controlled adaptation: legitimate operational change can
+be learned, while anomalous behavior cannot poison the profile.
+
+---
+
+## Surprise Challenge 2
+
+### Slow-Burn Behavioral Deviation
+
+A compromise may occur gradually. An attacker can introduce small
+deviations over multiple events instead of producing one clear malicious
+event.
+
+For this challenge, `service_alpha` begins a `SLOW_BURN` scenario after
+cycle 24. Early events use a new source-IP range and moderately changed
+activity. The system stores a separate cumulative evidence score for the
+identity.
+
+```text
+Mild deviation
+      |
+      v
+Evidence accumulates per identity
+      |
+      v
+DRIFTING
+      |
+      v
+Repeated mild deviations
+      |
+      v
+SUSPICIOUS
+      |
+      v
+Persistent deviation evidence
+      |
+      v
+HIGH_RISK
+```
+
+The implementation also decays evidence by `0.10` after normal behavior.
+This reduces the chance that one harmless, isolated anomaly permanently
+flags an identity.
+
+When evidence reaches the suspicious threshold, baseline promotion is
+blocked even if an unfamiliar behavior is observed repeatedly.
 
 ---
 
 ## Demo Scenarios
 
-The simulated event stream demonstrates the following situations:
-
-| Identity | Scenario | Expected System State |
-|---|---|---|
-| `service_alpha` | Stable regular access to known resources | `NORMAL` |
-| `worker_beta` | Starts accessing a new analytics/reporting resource | `DRIFTING` |
-| `deploy_gamma` | Uses unusual actions, IP addresses, or large transfers | `SUSPICIOUS` |
-| `api_delta` | Accesses sensitive resources such as a secrets vault | `HIGH_RISK` |
-
-### Demonstration Flow
-
-1. The system begins in a warm-up phase and learns normal activity.
-2. `service_alpha` continues normal behavior and remains trusted.
-3. `worker_beta` introduces low-risk new behavior and moves to `DRIFTING`.
-4. The drifting behavior is placed in quarantine instead of being immediately trusted.
-5. `deploy_gamma` creates multiple unusual signals and becomes `SUSPICIOUS`.
-6. `api_delta` accesses sensitive resources with high transfer volume and becomes `HIGH_RISK`.
-7. Suspicious and high-risk behavior does not update the trusted baseline.
+| Cycle | Identity | Scenario | Expected Outcome |
+|---:|---|---|---|
+| 1–5 | All identities | Warm-up normal behavior | `NORMAL` baseline learning |
+| 6–11 | `worker_beta` | New `reporting_api` resource | `DRIFTING`, then safe promotion |
+| 12–17 | `deploy_gamma` | New IP, unusual action, larger transfer | `SUSPICIOUS` |
+| 18–23 | `api_delta` | Sensitive resource and high-volume access | `HIGH_RISK` |
+| 24+ | `service_alpha` | Repeated mild new-IP and activity deviations | Slow-burn escalation |
 
 ---
 
-## Installation
+## How to Run
 
 ### Prerequisites
 
 - Python 3.10 or later
 - Git
-- Visual Studio Code or another Python IDE
+- Visual Studio Code or another Python editor
 
 ### Create and activate a virtual environment
 
-#### Windows PowerShell
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-#### Linux/macOS
+Linux or macOS:
 
 ```bash
 python3 -m venv .venv
@@ -335,152 +350,152 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
----
-
-## How to Run
-
-### Run the real-time activity generator
-
-From the root project folder:
+### Start the dashboard
 
 ```bash
-python -m src.activity_generator
+streamlit run app.py
 ```
 
-The terminal prints a continuous stream of JSON activity events.
-
-Stop the generator with:
+Open the local URL displayed by Streamlit, usually:
 
 ```text
-Ctrl + C
-```
-
-### Test behavioral profiles
-
-```bash
-python -m tests.test_profile
-```
-
-This test verifies that:
-
-- A normal event updates the trusted baseline.
-- A drifting event is stored in quarantine.
-- Each identity receives an independent profile.
-
-### Test the risk engine
-
-```bash
-python -m tests.test_risk_engine
-```
-
-This test demonstrates:
-
-- Warm-up baseline learning.
-- Normal behavior.
-- Drifting behavior.
-- High-risk behavior.
-- Risk-score calculation.
-- Explanation generation.
-- Baseline update and quarantine decisions.
-
----
-
-## Example Decision Output
-
-```text
-RiskDecision(
-    identity='api_delta',
-    state='HIGH_RISK',
-    risk_score=1.0,
-    reasons=[
-        'New resource accessed: secrets_vault',
-        'New action observed: EXECUTE',
-        'New source IP observed: 203.0.113.45',
-        'Data transfer is unusually high',
-        'Sensitive resource accessed: secrets_vault',
-        'Behavior was excluded from the trusted baseline because its risk level is suspicious or high-risk.'
-    ],
-    baseline_updated=False
-)
+http://localhost:8501
 ```
 
 ---
 
-## Security Design Principles
+## How to Demonstrate
 
-- The project uses only synthetic and sandboxed identity activity.
-- No real credentials, customer data, production systems, or external targets are used.
-- Each identity has an independent behavioral baseline.
-- Unseen behavior is not automatically treated as malicious.
-- Unseen behavior is also not automatically trusted.
-- Suspicious observations do not modify the trusted baseline.
-- The system produces explainable outputs instead of an opaque anomaly score alone.
-- The prototype is designed to run on a normal development machine.
+1. Open the Dashboard page.
+2. Click **Reset Demo**.
+3. Use **Generate One Cycle** five times to establish baselines.
+4. Continue to cycle 6 and select `worker_beta`.
+5. Show that `reporting_api` is quarantined as legitimate drift.
+6. Continue to cycle 8 and show promotion after repeated safe behavior.
+7. Continue to cycle 12 and show `deploy_gamma` as `SUSPICIOUS`.
+8. Continue to cycle 18 and show `api_delta` as `HIGH_RISK`.
+9. Continue to cycle 24 and select `service_alpha`.
+10. Show cumulative evidence growing across repeated mild deviations.
+11. Show the risk and evidence trend charts.
+12. Open the Explore page to explain the threat model and adaptation logic.
+13. Download CSV logs if event or decision evidence is requested.
 
 ---
 
-## Limitations
+## Dashboard Outputs
 
-This is a hackathon prototype. Current limitations include:
+The Dashboard page provides:
 
-- The activity source is simulated rather than connected to real IAM, SIEM, cloud, or audit logs.
-- Thresholds and scoring weights are initially rule-based.
-- The first version uses simple recent-score aggregation instead of advanced sequence models.
-- Drift confirmation is represented through quarantine but can be expanded with stronger approval and observation policies.
-- Identity-resource relationships can be enhanced with graph-based behavioral analysis.
-- A production system would require secure log ingestion, authentication, role-based access control, encryption, alerting integrations, and privacy controls.
+- Current state counts for all four trust levels.
+- Live evaluation metrics.
+- Identity Trust Overview table.
+- Slow-Burn Deviation Monitor.
+- Per-cycle risk-score chart.
+- Per-cycle cumulative-evidence chart.
+- Latest decision table with human-readable reasons.
+- Identity-specific explanation panel.
+- Trusted-resource and quarantined-resource views.
+- Event stream table.
+- CSV downloads for decision and event logs.
+
+The Explore page explains:
+
+- Threat model.
+- Trust-state definitions.
+- Controlled adaptation.
+- Slow-burn defense.
+- Evaluation metrics.
+- Known limitations.
+
+---
+
+## Evaluation Metrics
+
+| Metric | Meaning |
+|---|---|
+| Events Processed | Number of streaming events assessed |
+| Baseline Updates | Normal or verified-drift events added to trust profiles |
+| Baseline Protected | Events excluded from trusted learning |
+| Average Decision Latency | Mean processing time per event |
+| Suspicious Events | Count classified as `SUSPICIOUS` |
+| High-Risk Events | Count classified as `HIGH_RISK` |
+| Poisoning Attempts Blocked | Suspicious/high-risk observations excluded from baseline |
+| Risk Trend | Per-event deviation score across simulation cycles |
+| Evidence Trend | Per-identity cumulative evidence across cycles |
+
+---
+
+## Security and Safety
+
+- The project uses synthetic identities and simulated resources only.
+- No real credentials, customer data, production systems, or external
+  targets are used.
+- The application runs locally on normal hardware.
+- The dashboard does not perform offensive actions or access external
+  systems.
+- Suspicious observations are recorded for explanation but blocked from
+  changing trusted behavioral profiles.
+
+---
+
+## Known Limitations
+
+- Events are synthetic and designed for a safe live demonstration.
+- Risk weights and thresholds are rule-based rather than learned from a
+  production dataset.
+- Baselines exist only in Streamlit session state and reset when the app
+  restarts.
+- The prototype does not connect to a real IAM platform, SIEM, EDR,
+  cloud audit log, or database.
+- It does not yet model event timing, request frequency, or advanced
+  action sequences.
+- A production version would require secure log ingestion, persistent
+  storage, authentication, alert routing, access control, audit
+  retention, and threshold tuning from real organizational data.
 
 ---
 
 ## Future Improvements
 
-- Add a Streamlit live monitoring dashboard.
-- Store events and profiles in SQLite or PostgreSQL.
-- Add an API layer using FastAPI.
-- Add real-time charts for identity risk, state transitions, and anomaly trends.
-- Introduce time-of-day and request-frequency analysis.
-- Add sequential anomaly detection using Markov models or LSTM/Transformer-based sequence models.
+- Persist profiles and event history using SQLite or PostgreSQL.
+- Ingest sandboxed cloud or API audit logs.
+- Add time-window, frequency, and sequence-based analysis.
+- Add configurable policy thresholds and sensitive-resource lists.
+- Add alert workflow integration with email, Slack, or SIEM systems.
+- Add an analyst approval workflow for quarantined drift.
+- Add precision, false-positive, response-time, and recovery metrics
+  using labeled test scenarios.
 - Add graph-based analysis of identity-to-resource relationships.
-- Add configurable policies for sensitive resources.
-- Add alerting through email, Slack, or SIEM-compatible outputs.
-- Add a review workflow to approve legitimate behavioral drift.
-- Add metrics for false positives, response latency, baseline contamination resistance, and drift handling.
-
----
-
-## Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Python | Core implementation |
-| Pydantic | Event validation and structured data model |
-| Dataclasses | Behavioral profile and decision structures |
-| Collections / Counter | Frequency tracking for trusted and quarantine profiles |
-| Pytest or Python test scripts | Functional testing |
-| Git and GitHub | Version control and collaboration |
-| Streamlit | Planned real-time dashboard |
-| FastAPI | Planned backend API |
-| Pandas / NumPy | Planned event analysis and metrics |
-| Scikit-learn | Planned advanced anomaly detection |
 
 ---
 
 ## Team Responsibilities
 
-| Area | Responsibility |
+| Area | Suggested Responsibility |
 |---|---|
-| Event simulation | Generate safe and realistic NHI activity streams |
-| Behavioral profiling | Maintain trusted and quarantine profiles per identity |
-| Risk analysis | Detect deviations and calculate trust scores |
-| Baseline protection | Prevent suspicious behavior from becoming trusted |
-| Testing | Validate normal, drift, suspicious, high-risk, and poisoning scenarios |
-| Documentation | Maintain setup, architecture, and demonstration instructions |
-| GitHub | Commit meaningful development progress and maintain repository quality |
+| Event simulation | Generate safe normal, drift, suspicious, high-risk, and slow-burn events |
+| Behavioral profiling | Maintain independent trusted and quarantine profiles |
+| Risk engine | Score deviations and classify trust states |
+| Baseline protection | Verify drift and block suspicious promotion |
+| Dashboard | Implement Streamlit controls, metrics, charts, and exports |
+| Documentation | Maintain README, architecture, screenshots, and demo workflow |
+| GitHub | Commit genuine development progress and keep the repository current |
+
+Replace the suggested responsibilities with your team members' actual
+names and contributions before final submission.
 
 ---
 
 ## Conclusion
 
-This project demonstrates an adaptive behavioral trust approach for non-human identities. Instead of only detecting isolated anomalies, it models each identity separately, evaluates changing behavior over time, quarantines uncertain changes, and protects the trusted baseline against suspicious or gradually introduced malicious activity.
+This project demonstrates a lightweight, explainable adaptive behavioral
+trust system for Non-Human Identities. It assesses streaming identity
+activity, distinguishes legitimate drift from suspicious change, adapts
+only after controlled verification, and protects trust baselines from both
+sudden attacks and gradual slow-burn compromise attempts.
 
-The goal is to help security teams distinguish between legitimate workload evolution and possible credential compromise while keeping the system explainable, lightweight, and suitable for continuous monitoring.
+### Team Responsibilities and Contribution
+
+|Rithikakrishnan G| Streamlit dashboard and event simulation|
+|Rithikakrishnan G|Behavioral risk engine and baseline adaptation|
+|Akash S|Testing, Documentation, and Presentation|
