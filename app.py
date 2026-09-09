@@ -1,4 +1,5 @@
 import random
+import time 
 from collections import Counter, deque
 from datetime import datetime
 
@@ -268,11 +269,14 @@ st.caption(
     "trust assessment, drift detection, and baseline protection."
 )
 
-button_col, reset_col, info_col = st.columns([1, 1, 3])
+button_col, auto_col, reset_col, info_col = st.columns([1, 1, 1, 3])
 
 with button_col:
-    if st.button("Generate Activity Cycle", use_container_width=True):
+    if st.button("Generate One Cycle", use_container_width=True):
         generate_cycle()
+
+with auto_col:
+    auto_run = st.checkbox("Auto-run simulation")
 
 with reset_col:
     if st.button("Reset Demo", use_container_width=True):
@@ -281,8 +285,9 @@ with reset_col:
 with info_col:
     st.info(
         f"Simulation cycle: {st.session_state.cycle}. "
-        "Generate cycles to observe NORMAL, DRIFTING, "
-        "SUSPICIOUS, and HIGH_RISK states."
+        "Cycles 1–5 establish baseline behavior, cycles 6–11 demonstrate "
+        "drift, cycles 12–17 demonstrate suspicious activity, and cycle 18+ "
+        "demonstrates high-risk behavior."
     )
 
 st.divider()
@@ -395,3 +400,8 @@ if st.session_state.events:
         use_container_width=True,
         hide_index=True,
     )
+
+if auto_run:
+    generate_cycle()
+    time.sleep(1)
+    st.rerun()
