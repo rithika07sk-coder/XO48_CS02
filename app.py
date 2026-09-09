@@ -180,17 +180,35 @@ def analyze_event(profile, event):
         reasons.append("Matches the trusted baseline. Profile updated.")
 
     elif state == "DRIFTING":
-        profile["quarantine"][event["resource"]] += 1
-        reasons.append(
-            "New low-risk behavior quarantined before baseline update."
-        )
+        resource = event["resource"]
+        profile["quarantine"][resource] += 1
+
+        quarantine_count = profile["quarantine"][resource]
+
+        if quarantine_count >= 3:
+            update_baseline(profile, event)
+            baseline_updated = True
+
+            reasons.append(
+                f"New resource '{resource}' was observed "
+                f"{quarantine_count} times with low risk. "
+                "It is now verified as legitimate drift and added "
+                "to the trusted baseline."
+            )
+        else:
+            reasons.append(
+                f"New low-risk behavior is quarantined "
+                f"({quarantine_count}/3 observations). "
+                "It will not update the trusted baseline yet."
+            )
 
     else:
         profile["quarantine"][event["resource"]] += 1
         reasons.append(
-            "Suspicious behavior excluded from the trusted baseline."
+            "Suspicious or high-risk behavior was excluded from "
+            "the trusted baseline to prevent baseline poisoning."
         )
-
+        
     if not reasons:
         reasons.append("No meaningful deviation was detected.")
 
