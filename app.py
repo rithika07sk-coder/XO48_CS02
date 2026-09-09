@@ -19,17 +19,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    #MainMenu {
-        visibility: hidden;
-    }
-
-    footer {
-        visibility: hidden;
-    }
-
-    header {
-        background: transparent !important;
-    }
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+    header { background: transparent !important; }
 
     .stApp {
         background:
@@ -232,6 +224,11 @@ ICONS = {
     "HIGH_RISK": "🔴",
 }
 
+ML_MIN_SAMPLES = 8
+ML_BUFFER_SIZE = 40
+ML_RETRAIN_INTERVAL = 3
+ML_WEIGHT = 0.25
+
 
 def create_profile():
     return {
@@ -250,6 +247,13 @@ def create_profile():
         "deviation_evidence": 0.0,
         "deviation_events": 0,
         "last_evidence_reason": "No accumulated deviation evidence.",
+        "ml_feature_buffer": deque(maxlen=ML_BUFFER_SIZE),
+        "ml_model": None,
+        "ml_scaler": None,
+        "ml_score": 0.0,
+        "ml_status": "Collecting trusted warm-up events.",
+        "ml_trusted_samples": 0,
+        "ml_last_trained": 0,
     }
 
 
@@ -348,6 +352,126 @@ def calculate_event_score(profile, event):
     return min(score, 1.0), reasons
 
 
+def extract_ml_features(profile, event):
+    average_bytes = max(profile["average_bytes"], 1)
+
+    new_resource = int(
+        event["resource"] not in profile["trusted_resources"]
+    )
+
+    new_action = int(
+        event["action"] not in profile["trusted_actions"]
+    )
+
+    new_ip = int(
+        event["source_ip"] not in profile["trusted_ips"]
+    )
+
+    sensitive = int(
+        event["resource"] in SENSITIVE_RESOURCES
+    )
+
+    dangerous_action = int(
+        event["action"] in ["DELETE", "EXECUTE"]
+    )
+
+    failed = int(not event["success"])
+
+    volume_ratio = min(
+        event["bytes_transferred"] / average_bytes,
+        15.0,
+    )
+
+    return [
+        float(volume_ratio),
+        float(new_resource),
+        float(new_action),
+        float(new_ip),
+        float(sensitive),
+        float(dangerous_action),
+        float(failed),
+    ]
+
+
+def train_ml_model(profile):
+    buffer = list(profile["ml_feature_buffer"])
+
+    if len(buffer) < ML_MIN_SAMPLES:
+        profile["ml_status"] = (
+            f"Collecting trusted samples: "
+            f"{len(buffer)}/{ML_MIN_SAMPLES}."
+        )
+        return
+
+    scaler = StandardScaler()
+    scaled_buffer = scaler.fit_transform(buffer)
+
+    model = IsolationForest(
+        n_estimators=100,
+        contamination=0.15,
+        random_state=42,
+    )
+
+    model.fit(scaled_buffer)
+
+    profile["ml_model"] = model
+    profile["ml_scaler"] = scaler
+    profile["ml_last_trained"] = len(buffer)
+    profile["ml_status"] = (
+        f"Trained on {len(buffer)} trusted samples."
+    )
+
+
+def learn_trusted_ml_behavior(profile, event):
+    features = extract_ml_features(profile, event)
+
+    profile["ml_feature_buffer"].append(features)
+    profile["ml_trusted_samples"] += 1
+
+    buffer_size = len(profile["ml_feature_buffer"])
+
+    should_train = (
+        buffer_size >= ML_MIN_SAMPLES
+        and (
+            profile["ml_model"] is None
+            or (
+                buffer_size
+                - profile["ml_last_trained"]
+                >= ML_RETRAIN_INTERVAL
+            )
+        )
+    )
+
+    if should_train:
+        train_ml_model(profile)
+    elif profile["ml_model"] is None:
+        profile["ml_status"] = (
+            f"Collecting trusted samples: "
+            f"{buffer_size}/{ML_MIN_SAMPLES}."
+        )
+
+
+def calculate_ml_score(profile, event):
+    if (
+        profile["ml_model"] is None
+        or profile["ml_scaler"] is None
+    ):
+        profile["ml_score"] = 0.0
+        return 0.0
+
+    features = extract_ml_features(profile, event)
+    scaled = profile["ml_scaler"].transform([features])
+
+    raw_score = -profile["ml_model"].decision_function(
+        scaled
+    )[0]
+
+    ml_score = max(0.0, min(raw_score * 2.5, 1.0))
+    profile["ml_score"] = round(ml_score, 2)
+
+    return profile["ml_score"]
+
+
 def update_evidence(profile, score):
     if score >= 0.25:
         profile["deviation_evidence"] += score
@@ -395,25 +519,40 @@ def choose_state(profile, score, event):
 def analyze_event(profile, event):
     if profile["total_events"] < 5:
         update_baseline(profile, event)
+        learn_trusted_ml_behavior(profile, event)
 
         return {
             "state": "NORMAL",
             "risk_score": 0.0,
+            "rule_score": 0.0,
+            "ml_score": 0.0,
             "reasons": [
                 "Warm-up: collecting trusted baseline behavior."
             ],
             "baseline_updated": True,
         }
 
-    score, reasons = calculate_event_score(profile, event)
-    profile["recent_scores"].append(score)
-    update_evidence(profile, score)
+    rule_score, reasons = calculate_event_score(profile, event)
+    ml_score = calculate_ml_score(profile, event)
 
-    state = choose_state(profile, score, event)
+    final_score = min(
+        1.0,
+        rule_score + (ml_score * ML_WEIGHT),
+    )
+
+    reasons.append(
+        f"Isolation Forest ML anomaly score: {ml_score:.2f}"
+    )
+
+    profile["recent_scores"].append(final_score)
+    update_evidence(profile, final_score)
+
+    state = choose_state(profile, final_score, event)
     baseline_updated = False
 
     if state == "NORMAL":
         update_baseline(profile, event)
+        learn_trusted_ml_behavior(profile, event)
         baseline_updated = True
 
         reasons.append(
@@ -433,6 +572,7 @@ def analyze_event(profile, event):
 
         if safe_to_promote:
             update_baseline(profile, event)
+            learn_trusted_ml_behavior(profile, event)
             baseline_updated = True
 
             reasons.append(
@@ -460,12 +600,11 @@ def analyze_event(profile, event):
             "baseline poisoning."
         )
 
-    if not reasons:
-        reasons.append("No meaningful deviation detected.")
-
     return {
         "state": state,
-        "risk_score": round(score, 2),
+        "risk_score": round(final_score, 2),
+        "rule_score": round(rule_score, 2),
+        "ml_score": round(ml_score, 2),
         "reasons": reasons,
         "baseline_updated": baseline_updated,
     }
@@ -543,6 +682,8 @@ def generate_cycle():
                 "Time": event["timestamp"],
                 "Identity": identity,
                 "State": new_state,
+                "Rule Score": decision["rule_score"],
+                "ML Anomaly Score": decision["ml_score"],
                 "Risk Score": decision["risk_score"],
                 "Evidence Score": round(
                     profile["deviation_evidence"],
@@ -583,18 +724,16 @@ def calculate_metrics(decisions):
             "high_risk": 0,
             "blocked": 0,
             "latency": 0.0,
+            "ml_average": 0.0,
         }
 
     total = len(decisions)
-
     updates = int(
         (decisions["Baseline Updated"] == "Yes").sum()
     )
-
     suspicious = int(
         (decisions["State"] == "SUSPICIOUS").sum()
     )
-
     high_risk = int(
         (decisions["State"] == "HIGH_RISK").sum()
     )
@@ -621,10 +760,14 @@ def calculate_metrics(decisions):
             decisions["Latency (ms)"].mean(),
             3,
         ),
+        "ml_average": round(
+            decisions["ML Anomaly Score"].mean(),
+            2,
+        ),
     }
 
 
-def render_dashboard():
+def render_banner():
     st.markdown(
         """
         <div style="
@@ -649,7 +792,7 @@ def render_dashboard():
                 letter-spacing: 2px;
                 margin-bottom: 8px;
             ">
-                CYBER SECURITY PS-02 · LIVE TRUST MONITOR
+                CYBER SECURITY PS-02 · HYBRID ML TRUST MONITOR
             </div>
             <div style="
                 color: #F0FCFF;
@@ -664,14 +807,16 @@ def render_dashboard():
                 font-size: 1.02rem;
                 margin-top: 8px;
             ">
-                Continuous monitoring for Non-Human Identities,
-                controlled adaptation, and baseline-poisoning defense.
+                Isolation Forest ML + security rules + cumulative
+                evidence for continuous NHI monitoring.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+
+def render_status_strip():
     st.markdown(
         """
         <div style="
@@ -700,7 +845,7 @@ def render_dashboard():
                 font-size: 0.80rem;
                 font-weight: 700;
             ">
-                ◈ BASELINE PROTECTION ENABLED
+                ◈ ISOLATION FOREST ML ENABLED
             </span>
             <span style="
                 padding: 7px 12px;
@@ -711,17 +856,23 @@ def render_dashboard():
                 font-size: 0.80rem;
                 font-weight: 700;
             ">
-                ✓ SLOW-BURN DETECTION READY
+                ✓ BASELINE PROTECTION ACTIVE
             </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+
+def render_dashboard():
+    render_banner()
+    render_status_strip()
+
     st.info(
-        "The system learns separate identity baselines, "
-        "quarantines unfamiliar low-risk behavior, and "
-        "excludes suspicious behavior from trusted learning."
+        "The system uses a hybrid backend: explicit security "
+        "rules detect known dangerous signals, while Isolation "
+        "Forest learns trusted behavioral patterns and scores "
+        "unusual event combinations."
     )
 
     left, right = st.columns(2)
@@ -772,7 +923,6 @@ def render_dashboard():
             profile["state"] == state
             for profile in st.session_state.profiles.values()
         )
-
         column.metric(f"{ICONS[state]} {state}", count)
 
     decisions = decisions_dataframe()
@@ -785,20 +935,22 @@ def render_dashboard():
     m1.metric("Events Processed", metrics["total"])
     m2.metric("Baseline Updates", metrics["updates"])
     m3.metric("Baseline Protected", metrics["protected"])
-
     m4.metric(
         "Avg Decision Latency",
         f"{metrics['latency']} ms",
     )
 
-    m5, m6, m7 = st.columns(3)
+    m5, m6, m7, m8 = st.columns(4)
 
     m5.metric("Suspicious Events", metrics["suspicious"])
     m6.metric("High-Risk Events", metrics["high_risk"])
-
     m7.metric(
         "Poisoning Attempts Blocked",
         metrics["blocked"],
+    )
+    m8.metric(
+        "Average ML Score",
+        metrics["ml_average"],
     )
 
     st.subheader("Identity Trust Overview")
@@ -823,14 +975,15 @@ def render_dashboard():
                     f"{profile['state']}"
                 ),
                 "Recent Risk": recent_risk,
+                "ML Score": profile["ml_score"],
                 "Evidence": round(
                     profile["deviation_evidence"],
                     2,
                 ),
-                "Deviation Events": profile[
-                    "deviation_events"
-                ],
                 "Trusted Events": profile["total_events"],
+                "ML Samples": len(
+                    profile["ml_feature_buffer"]
+                ),
                 "Baseline Updated": (
                     "Yes"
                     if profile["baseline_updated"]
@@ -864,6 +1017,8 @@ def render_dashboard():
         slow_burn.append(
             {
                 "Identity": identity,
+                "ML Status": profile["ml_status"],
+                "ML Score": profile["ml_score"],
                 "Evidence Score": round(evidence, 2),
                 "Deviation Events": profile[
                     "deviation_events"
@@ -882,13 +1037,20 @@ def render_dashboard():
         hide_index=True,
     )
 
-    st.subheader("Risk and Evidence Trends")
+    st.subheader("Risk, ML, and Evidence Trends")
 
     if not decisions.empty:
         risk_chart = decisions.pivot_table(
             index="Cycle",
             columns="Identity",
             values="Risk Score",
+            aggfunc="mean",
+        ).sort_index()
+
+        ml_chart = decisions.pivot_table(
+            index="Cycle",
+            columns="Identity",
+            values="ML Anomaly Score",
             aggfunc="mean",
         ).sort_index()
 
@@ -899,24 +1061,30 @@ def render_dashboard():
             aggfunc="mean",
         ).sort_index()
 
-        chart_left, chart_right = st.columns(2)
+        left_chart, center_chart, right_chart = st.columns(3)
 
-        with chart_left:
-            st.caption("Per-event risk score by cycle")
-
+        with left_chart:
+            st.caption("Final risk score by cycle")
             st.line_chart(
                 risk_chart,
                 width="stretch",
-                height=300,
+                height=280,
             )
 
-        with chart_right:
-            st.caption("Cumulative evidence score by cycle")
+        with center_chart:
+            st.caption("Isolation Forest ML anomaly score")
+            st.line_chart(
+                ml_chart,
+                width="stretch",
+                height=280,
+            )
 
+        with right_chart:
+            st.caption("Cumulative evidence score")
             st.line_chart(
                 evidence_chart,
                 width="stretch",
-                height=300,
+                height=280,
             )
     else:
         st.write("Generate events to display trends.")
@@ -966,6 +1134,16 @@ def render_dashboard():
     )
 
     st.write(
+        f"**Isolation Forest ML score:** "
+        f"{profile['ml_score']:.2f}"
+    )
+
+    st.write(
+        f"**ML training status:** "
+        f"{profile['ml_status']}"
+    )
+
+    st.write(
         f"**Cumulative evidence:** "
         f"{profile['deviation_evidence']:.2f}"
     )
@@ -988,12 +1166,12 @@ def render_dashboard():
     if profile["baseline_updated"]:
         st.success(
             "Baseline decision: trusted behavior updated "
-            "the identity profile."
+            "the identity profile and ML training buffer."
         )
     else:
         st.warning(
             "Baseline decision: behavior was quarantined "
-            "or excluded; baseline protected."
+            "or excluded; it was not used for ML training."
         )
 
     trusted, quarantined = st.columns(2)
@@ -1066,7 +1244,7 @@ def render_explore():
                 color: #C7D7E3;
                 margin-top: 7px;
             ">
-                Threat model, trust-state logic, adaptation policy,
+                Threat model, Isolation Forest ML, adaptation policy,
                 slow-burn defense, evaluation, and limitations.
             </div>
         </div>
@@ -1078,7 +1256,7 @@ def render_explore():
         [
             "Threat Model",
             "Trust States",
-            "Adaptation",
+            "Isolation Forest ML",
             "Slow-Burn Defense",
             "Evaluation",
             "Limitations",
@@ -1143,20 +1321,50 @@ def render_explore():
         )
 
     with tab3:
-        st.subheader("Controlled Adaptation")
+        st.subheader("Isolation Forest ML Layer")
 
         st.markdown(
             """
-            Each identity receives five warm-up events to establish
-            a baseline. Normal events update trusted behavior.
+            The backend uses Isolation Forest, an unsupervised
+            Machine Learning anomaly-detection algorithm.
 
-            A low-risk unknown resource is quarantined. It must be
-            observed safely at least three times before promotion.
+            Each NHI has a separate ML model, feature buffer, and
+            scaler. The model is trained only using trusted normal
+            events and verified legitimate drift.
 
-            Suspicious and high-risk events are recorded but never
-            incorporated into the trusted baseline. This protects
-            the system against immediate baseline poisoning.
+            Features include data-volume ratio, unknown resource,
+            unknown action, unknown IP, sensitive access, dangerous
+            action, and failed operation.
+
+            The model learns the normal feature distribution for
+            each identity. If a new event is easy to isolate from
+            trusted samples, it receives a higher ML anomaly score.
+
+            Final Risk Score =
+            Rule-Based Security Score +
+            25% of Isolation Forest ML Anomaly Score.
+
+            The ML score can increase risk, but it cannot reduce
+            explicit security risk from known dangerous actions.
             """
+        )
+
+        ml_table = pd.DataFrame(
+            [
+                ["1", "Collect trusted NHI event features"],
+                ["2", "Scale numeric features with StandardScaler"],
+                ["3", "Train Isolation Forest on trusted buffer"],
+                ["4", "Score new event for anomaly likelihood"],
+                ["5", "Combine ML score with security rules"],
+                ["6", "Train only after safe baseline decision"],
+            ],
+            columns=["Step", "ML Process"],
+        )
+
+        st.dataframe(
+            ml_table,
+            width="stretch",
+            hide_index=True,
         )
 
     with tab4:
@@ -1215,14 +1423,16 @@ def render_explore():
 
         st.markdown(
             """
-            - Decision latency measures continuous-monitoring speed.
+            - Decision latency measures monitoring speed.
+            - Rule score shows explainable security risk.
+            - ML anomaly score shows Isolation Forest output.
             - Baseline updates show controlled adaptation.
             - Baseline-protected events show observations excluded
-              from trusted learning.
+              from both trusted profile and ML training.
             - Poisoning attempts blocked counts suspicious and
               high-risk observations prevented from affecting trust.
-            - Risk and evidence charts demonstrate detection
-              consistency and time to escalation.
+            - Trend charts show detection consistency and time to
+              escalation.
             """
         )
 
@@ -1232,8 +1442,11 @@ def render_explore():
         st.markdown(
             """
             - Events are synthetic and generated for demonstration.
-            - Risk weights and thresholds are rule-based.
-            - Baselines are stored only during the Streamlit session.
+            - The ML model uses a rolling trusted sample buffer.
+            - Isolation Forest is retrained periodically, not after
+              every single event.
+            - Rule weights and thresholds are manually selected.
+            - Baselines and ML models exist only during the session.
             - Data resets when the application restarts.
             - The project does not integrate a real SIEM, IAM, EDR,
               database, or production environment.
@@ -1254,7 +1467,7 @@ if "page" not in st.session_state:
 with st.sidebar:
     st.title("🛡️ NHI Trust")
 
-    st.caption("Adaptive Behavioral Security Monitor")
+    st.caption("Hybrid ML Behavioral Security Monitor")
 
     st.session_state.page = st.radio(
         "Navigate",
@@ -1274,9 +1487,9 @@ with st.sidebar:
 
         🟢 Monitoring engine ready
 
-        🟣 Baseline protection enabled
+        🟣 Isolation Forest ML enabled
 
-        🟠 Slow-burn defense enabled
+        🟠 Baseline and slow-burn defense enabled
         """
     )
 
@@ -1287,6 +1500,10 @@ with st.sidebar:
         **Project:** Adaptive Behavioral Trust
 
         **Problem:** Cyber Security PS-02
+
+        **Backend:** Python + Scikit-learn
+
+        **ML Model:** Isolation Forest
 
         **Focus:** Continuous identity trust, controlled
         adaptation, baseline-poisoning resistance, and
