@@ -494,8 +494,10 @@ activity, distinguishes legitimate drift from suspicious change, adapts
 only after controlled verification, and protects trust baselines from both
 sudden attacks and gradual slow-burn compromise attempts.
 
-### Team Responsibilities and Contribution
+### Team Responsibilities 
 
-|Rithikakrishnan G| Streamlit dashboard and event simulation|
-|Rithikakrishnan G|Behavioral risk engine and baseline adaptation|
-|Akash S|Testing, Documentation, and Presentation|
+| Team Member | Role and Contribution |
+|---|---|
+| Rithikakrishnan G | Streamlit dashboard development and event simulation |
+| Rithikakrishnan G | Behavioral risk engine and baseline adaptation |
+| Akash S | Testing, documentation, and presentation |
