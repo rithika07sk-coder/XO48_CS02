@@ -208,7 +208,7 @@ def analyze_event(profile, event):
             "Suspicious or high-risk behavior was excluded from "
             "the trusted baseline to prevent baseline poisoning."
         )
-        
+
     if not reasons:
         reasons.append("No meaningful deviation was detected.")
 
@@ -280,6 +280,9 @@ def generate_cycle():
 if "profiles" not in st.session_state:
     initialize_demo()
 
+if "auto_run" not in st.session_state:
+    st.session_state.auto_run = False
+
 
 st.title("🛡️ Adaptive Behavioral Trust for Non-Human Identities")
 st.caption(
@@ -294,7 +297,10 @@ with button_col:
         generate_cycle()
 
 with auto_col:
-    auto_run = st.checkbox("Auto-run simulation")
+    auto_run = st.checkbox(
+        "Auto-run simulation",
+        key="auto_run",
+    )
 
 with reset_col:
     if st.button("Reset Demo", use_container_width=True):
@@ -423,3 +429,4 @@ if auto_run:
     generate_cycle()
     time.sleep(1)
     st.rerun()
+
