@@ -5,6 +5,8 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 st.set_page_config(
