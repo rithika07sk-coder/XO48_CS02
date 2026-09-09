@@ -224,7 +224,7 @@ ICONS = {
     "HIGH_RISK": "🔴",
 }
 
-ML_MIN_SAMPLES = 8
+ML_MIN_SAMPLES = 5
 ML_BUFFER_SIZE = 40
 ML_RETRAIN_INTERVAL = 3
 ML_WEIGHT = 0.25
@@ -473,25 +473,26 @@ def calculate_ml_score(profile, event):
 
 
 def update_evidence(profile, score):
+    evidence = profile["deviation_evidence"]
+
     if score >= 0.25:
-        profile["deviation_evidence"] += score
+        evidence += score
         profile["deviation_events"] += 1
 
         profile["last_evidence_reason"] = (
-            f"Accumulated evidence: "
-            f"{profile['deviation_evidence']:.2f} across "
-            f"{profile['deviation_events']} deviations."
+            f"Evidence increased by {score:.2f}. "
+            f"Current accumulated evidence: {evidence:.2f} "
+            f"across {profile['deviation_events']} deviations."
         )
     else:
-        profile["deviation_evidence"] = max(
-            0.0,
-            profile["deviation_evidence"] - 0.10,
-        )
+        evidence = max(0.0, evidence - 0.10)
 
         profile["last_evidence_reason"] = (
-            f"Evidence decayed after normal activity: "
-            f"{profile['deviation_evidence']:.2f}."
+            f"No major deviation in this event. "
+            f"Evidence decayed by 0.10 to {evidence:.2f}."
         )
+
+    profile["deviation_evidence"] = round(evidence, 2)
 
 
 def choose_state(profile, score, event):
