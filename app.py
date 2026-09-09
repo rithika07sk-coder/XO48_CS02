@@ -13,61 +13,6 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🛡️ Adaptive Behavioral Trust for Non-Human Identities")
-st.caption(
-    "Cyber Security PS-02 | Real-time behavior monitoring, "
-    "trust assessment, drift detection, and baseline protection."
-)
-
-button_col, auto_col, reset_col, info_col = st.columns([1, 1, 1, 3])
-
-with button_col:
-    if st.button("Generate One Cycle", use_container_width=True):
-        generate_cycle()
-
-with auto_col:
-    auto_run = st.checkbox(
-        "Auto-run simulation",
-        key="auto_run",
-    )
-
-with reset_col:
-    if st.button("Reset Demo", use_container_width=True):
-        initialize_demo()
-
-with info_col:
-    st.info(
-        f"Simulation cycle: {st.session_state.cycle}. "
-        "Cycles 1–5 establish baseline behavior, cycles 6–11 demonstrate "
-        "drift, cycles 12–17 demonstrate suspicious activity, and cycle 18+ "
-        "demonstrates high-risk behavior."
-    )
-
-st.divider()
-
-state_icons = {
-    "NORMAL": "🟢",
-    "DRIFTING": "🟡",
-    "SUSPICIOUS": "🟠",
-    "HIGH_RISK": "🔴",
-}
-
-metric_columns = st.columns(4)
-
-for index, state in enumerate(
-    ["NORMAL", "DRIFTING", "SUSPICIOUS", "HIGH_RISK"]
-):
-    count = sum(
-        1
-        for profile in st.session_state.profiles.values()
-        if profile["state"] == state
-    )
-    metric_columns[index].metric(
-        f"{state_icons[state]} {state}",
-        count,
-    )
-
-
 st.subheader("Baseline Poisoning Resistance Challenge")
 
 st.info(
@@ -362,6 +307,61 @@ if "profiles" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = False
 
+
+st.title("🛡️ Adaptive Behavioral Trust for Non-Human Identities")
+st.caption(
+    "Cyber Security PS-02 | Real-time behavior monitoring, "
+    "trust assessment, drift detection, and baseline protection."
+)
+
+button_col, auto_col, reset_col, info_col = st.columns([1, 1, 1, 3])
+
+with button_col:
+    if st.button("Generate One Cycle", use_container_width=True):
+        generate_cycle()
+
+with auto_col:
+    auto_run = st.checkbox(
+        "Auto-run simulation",
+        key="auto_run",
+    )
+
+with reset_col:
+    if st.button("Reset Demo", use_container_width=True):
+        initialize_demo()
+
+with info_col:
+    st.info(
+        f"Simulation cycle: {st.session_state.cycle}. "
+        "Cycles 1–5 establish baseline behavior, cycles 6–11 demonstrate "
+        "drift, cycles 12–17 demonstrate suspicious activity, and cycle 18+ "
+        "demonstrates high-risk behavior."
+    )
+
+st.divider()
+
+state_icons = {
+    "NORMAL": "🟢",
+    "DRIFTING": "🟡",
+    "SUSPICIOUS": "🟠",
+    "HIGH_RISK": "🔴",
+}
+
+metric_columns = st.columns(4)
+
+for index, state in enumerate(
+    ["NORMAL", "DRIFTING", "SUSPICIOUS", "HIGH_RISK"]
+):
+    count = sum(
+        1
+        for profile in st.session_state.profiles.values()
+        if profile["state"] == state
+    )
+    metric_columns[index].metric(
+        f"{state_icons[state]} {state}",
+        count,
+    )
+
 st.subheader("Identity Trust Overview")
 
 overview = []
@@ -434,7 +434,7 @@ else:
         "Baseline decision: behavior was quarantined or excluded; "
         "trusted baseline was protected."
     )
-
+    
 trusted_col, quarantine_col = st.columns(2)
 
 with trusted_col:
