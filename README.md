@@ -498,6 +498,6 @@ sudden attacks and gradual slow-burn compromise attempts.
 
 | Team Member | Role and Contribution |
 |---|---|
-| Rithikakrishnan G | Streamlit dashboard development and event simulation |
+| Rithikakrishnan G, Akash S | Streamlit dashboard development and event simulation |
 | Rithikakrishnan G | Behavioral risk engine and baseline adaptation |
 | Akash S | Testing, documentation, and presentation |
